@@ -1,0 +1,112 @@
+local currentGameId = game.PlaceId
+
+local gameConfigs = {
+    [1345139196] = {
+        name = "寻宝模拟器",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E5%AF%BB%E5%AE%9D%E6%A8%A1%E6%8B%9F%E5%99%A8"
+    },
+    [137629155365661] = {
+        name = "逃离海啸",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E9%80%83%E7%A6%BB%E6%B5%B7%E5%95%B8"
+    },
+    [83728249169833] = {
+        name = "快速射击",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E5%BF%AB%E9%80%9F%E5%B0%84%E5%87%BB"
+    },
+    [102707799497750] = {
+        name = "你已经哭了Obby",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E4%BD%A0%E5%B7%B2%E6%80%A5%E5%93%ADObby"
+    },
+    [142823291] = {
+        name = "MM2",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/MM2"
+    },
+    [98502499119821] = {
+        name = "重型钓鱼",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E9%87%8D%E5%9E%8B%E9%92%93%E9%B1%BC"
+    },
+    [136801880565837] = {
+        name = "闪光",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E9%97%AA%E5%85%89"
+    },
+    [103593441753340] = {
+        name = "寻找按钮",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E5%AF%BB%E6%89%BE%E6%8C%89%E9%92%AE"
+    },
+    [95082159892680] = {
+        name = "键盘速度逃离",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E9%94%AE%E7%9B%98%E9%80%9F%E5%BA%A6%E9%80%83%E7%A6%BB"
+    },
+    [112407111406060] = {
+        name = "格挡跑酷",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E6%A0%BC%E6%8C%A1%E8%B7%91%E9%85%B7"
+    }
+}
+
+-- 未匹配到游戏时使用通用脚本
+if not gameConfigs[currentGameId] then
+    gameConfigs[currentGameId] = {
+        name = "通用脚本",
+        scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E9%80%9A%E7%94%A8"
+    }
+end
+
+local config = gameConfigs[currentGameId]
+
+-- 显示右下角通知
+local function showNotification(message)
+    local player = game:GetService("Players").LocalPlayer
+    local playerGui = player:WaitForChild("PlayerGui")
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 300, 0, 60)
+    frame.Position = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 1
+    frame.Parent = screenGui
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Text = message
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextScaled = true
+    textLabel.BackgroundTransparency = 1
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = frame
+
+    -- 弹出动画
+    frame:TweenPosition(
+        UDim2.new(1, -310, 1, -70),
+        Enum.EasingDirection.Out,
+        Enum.EasingStyle.Quad,
+        0.3
+    )
+
+    -- 消失动画
+    task.delay(2, function()
+        local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = game:GetService("TweenService"):Create(
+            textLabel, tweenInfo, { TextTransparency = 1 }
+        )
+        tween:Play()
+        tween.Completed:Wait()
+        screenGui:Destroy()
+    end)
+end
+
+showNotification("正在加载 " .. config.name)
+
+-- 异步执行脚本
+task.spawn(function()
+    local success, errorMsg = pcall(function()
+        if config.scriptUrl then
+            loadstring(game:HttpGet(config.scriptUrl))()
+        end
+    end)
+
+    if not success then
+        warn("脚本加载失败: " .. errorMsg)
+    end
+end)
