@@ -40,6 +40,10 @@ local gameConfigs = {
     [112407111406060] = {
         name = "格挡跑酷",
         scriptUrl = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/refs/heads/main/%E6%A0%BC%E6%8C%A1%E8%B7%91%E9%85%B7"
+    },
+    [138078880987602] = {
+        name = "➕1速度以逃脱",
+        scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E2%9E%951%E9%80%9F%E5%BA%A6%E4%BB%A5%E9%80%83%E8%84%B1"
     }
 }
 
