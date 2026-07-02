@@ -48,6 +48,10 @@ local gameConfigs = {
     [116223724643557] = {
         name = "+1魔法进化",
         scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%2B1%E9%AD%94%E6%B3%95%E8%BF%9B%E5%8C%96"
+    },
+    [90148635862803] = {
+        name = "在末日中存活下来",
+        scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E5%9C%A8%E6%9C%AB%E6%97%A5%E4%B8%AD%E5%AD%98%E6%B4%BB%E4%B8%8B%E6%9D%A5"
     }
 }
 
