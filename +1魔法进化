@@ -1,0 +1,241 @@
+local WindUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
+))()
+
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+
+    local length = #chars
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+
+        result = result .. string.format(
+            '<font color="rgb(%d,%d,%d)">%s</font>',
+            math.floor(r * 255),
+            math.floor(g * 255),
+            math.floor(b * 255),
+            chars[i]
+        )
+    end
+
+    return result
+end
+
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local placeName = game.Name
+local ok, info = pcall(function()
+    return MarketplaceService:GetProductInfo(game.PlaceId)
+end)
+
+if ok and info then
+    placeName = info.Name
+end
+
+local Window = WindUI:CreateWindow({
+    Title = gradient("Snow disaster HUB", Color3.fromHex("#000080"), Color3.fromHex("#00FFFF")),
+    Author = gradient("司空", Color3.fromHex("#00FFAA"), Color3.fromHex("#00AAFF")),
+    Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+    IconThemed = true,
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 270),
+    Transparent = true,
+    Theme = "Dark",
+    Background = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/40597de97c2622ae03913003e0f360bb4e7ff9fa/u%3D2512903668%2C3742891092%26fm%3D253%26fmt%3Dauto%26app%3D138%26f%3DJPEG.webp",
+    SideBarWidth = 200,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    OpenButton = {
+        Title = "Snow disaster HUB",
+        Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+        CornerRadius = UDim.new(0, 8),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(
+            Color3.fromHex("FFFFFF"),
+            Color3.fromHex("0000FF")
+        ),
+        Draggable = true,
+    },
+})
+
+do
+    local mainContainer = Window.UIElements and Window.UIElements.Main
+    if mainContainer then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "RainbowStroke"
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+        local rainbow = Instance.new("UIGradient")
+        rainbow.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 149, 237)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+        })
+
+        stroke.Parent = mainContainer
+        rainbow.Parent = stroke
+
+        task.spawn(function()
+            while mainContainer and mainContainer.Parent do
+                rainbow.Rotation = (rainbow.Rotation + 3.5) % 360
+                task.wait(0.03)
+            end
+        end)
+    end
+end
+
+local Tag = Window:Tag({
+    Title = placeName,
+    Radius = 5,
+    Color = Color3.fromHex("#ADD8E6"),
+    Border = true,
+})
+
+local Tabs = {
+    Tabgn = Window:Tab({
+        Title = "功能",
+        Icon = "info",
+    }),
+}
+
+-- ==============================
+-- 自动魔法值（GainMagicPower）
+-- ==============================
+local autoMagicPowerEnabled = false
+local autoMagicPowerSpeed = 0.01
+local autoMagicPowerRunning = false
+
+Tabs.Tabgn:Section({ Title = "自动魔法值" })
+
+Tabs.Tabgn:Toggle({
+    Title = "启用自动魔法值",
+    Default = false,
+    Callback = function(state)
+        autoMagicPowerEnabled = state
+
+        if autoMagicPowerEnabled then
+            if not autoMagicPowerRunning then
+                autoMagicPowerRunning = true
+                task.spawn(function()
+                    while autoMagicPowerEnabled do
+                        pcall(function()
+                            game:GetService("ReplicatedStorage")
+                                :WaitForChild("Remotes")
+                                :WaitForChild("GainMagicPower")
+                                :FireServer()
+                        end)
+                        task.wait(autoMagicPowerSpeed)
+                    end
+                    autoMagicPowerRunning = false
+                end)
+            end
+        end
+    end
+})
+
+Tabs.Tabgn:Input({
+    Title = "触发间隔（秒）",
+    Placeholder = "0.01",
+    Callback = function(value)
+        local num = tonumber(value)
+        if num and num > 0 then
+            autoMagicPowerSpeed = num
+        else
+            WindUI:Notify({
+                Title = "提示",
+                Content = "请输入一个大于 0 的数字",
+                Duration = 2,
+            })
+        end
+    end
+})
+
+-- ==============================
+-- 人物移动速度修改器
+-- ==============================
+local walkSpeedEnabled = false
+local walkSpeedValue = 50
+local walkSpeedInterval = 0.5
+local walkSpeedRunning = false
+
+Tabs.Tabgn:Section({ Title = "人物移动速度" })
+
+Tabs.Tabgn:Toggle({
+    Title = "启用移动速度修改",
+    Default = false,
+    Callback = function(state)
+        walkSpeedEnabled = state
+
+        if walkSpeedEnabled then
+            if not walkSpeedRunning then
+                walkSpeedRunning = true
+                task.spawn(function()
+                    while walkSpeedEnabled do
+                        pcall(function()
+                            local player = game:GetService("Players").LocalPlayer
+                            local character = player and player.Character
+                            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                            if humanoid then
+                                humanoid.WalkSpeed = walkSpeedValue
+                            end
+                        end)
+                        task.wait(walkSpeedInterval)
+                    end
+                    -- 关闭时恢复原速
+                    pcall(function()
+                        local player = game:GetService("Players").LocalPlayer
+                        local character = player and player.Character
+                        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                        if humanoid then
+                            humanoid.WalkSpeed = 16
+                        end
+                    end)
+                    walkSpeedRunning = false
+                end)
+            end
+        end
+    end
+})
+
+Tabs.Tabgn:Input({
+    Title = "移动速度",
+    Placeholder = "50",
+    Callback = function(value)
+        local num = tonumber(value)
+        if num and num > 0 then
+            walkSpeedValue = num
+        else
+            WindUI:Notify({
+                Title = "提示",
+                Content = "请输入一个大于 0 的数字",
+                Duration = 2,
+            })
+        end
+    end
+})
+
+Tabs.Tabgn:Input({
+    Title = "刷新间隔（秒）",
+    Placeholder = "0.5",
+    Callback = function(value)
+        local num = tonumber(value)
+        if num and num > 0 then
+            walkSpeedInterval = num
+        else
+            WindUI:Notify({
+                Title = "提示",
+                Content = "请输入一个大于 0 的数字",
+                Duration = 2,
+            })
+        end
+    end
+})
