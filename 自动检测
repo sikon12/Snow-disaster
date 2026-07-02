@@ -3853,7 +3853,7 @@ elseif game.PlaceId == 95082159892680 then
     print("键盘速度逃离")
 elseif game.PlaceId == 112407111406060 then
     print("格挡跑酷")
-elseif game.PlaceId == 138078880987602 then
+elseif game.PlaceId == 116223724643557 then
     local WindUI = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
 ))()
@@ -4100,4 +4100,189 @@ elseif game.PlaceId == 116223724643557 then
     print("+1魔法进化")
 else
     print("通用脚本")
+end
+
+elseif game.PlaceId == 138078880987602 then
+    local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+    
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+    
+    local length = #chars
+    
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+        
+        result = result .. string.format('<font color="rgb(%d,%d,%d)">%s</font>', 
+            math.floor(r * 255), 
+            math.floor(g * 255), 
+            math.floor(b * 255), 
+            chars[i])
+    end
+    
+    return result
+end
+
+local Window = WindUI:CreateWindow({
+    Title = gradient("Snow disaster HUB", Color3.fromHex("#000080"), Color3.fromHex("#00FFFF")), 
+    Author = gradient("司空", Color3.fromHex("#00FFAA"), Color3.fromHex("#00AAFF")),
+    Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+    IconThemed = true,
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 270),
+    Transparent = true,
+    Theme = "Dark",
+    Background = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/40597de97c2622ae03913003e0f360bb4e7ff9fa/u%3D2512903668%2C3742891092%26fm%3D253%26fmt%3Dauto%26app%3D138%26f%3DJPEG.webp",
+    SideBarWidth = 200,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    OpenButton = {
+        Title = "Snow disaster HUB",
+        Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+        CornerRadius = UDim.new(0, 8),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(
+            Color3.fromHex("FFFFFF"),
+            Color3.fromHex("0000FF")
+        ),
+        Draggable = true,
+    },
+})
+
+Window:Tag({
+    Title = "服务器名字",
+    Radius = 5,
+    Color = Color3.fromHex("#ADD8E6"),
+    Border = true,
+})
+
+do
+    local mainContainer = Window.UIElements and Window.UIElements.Main
+    if mainContainer then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "RainbowStroke"
+        stroke.Thickness = 2
+        stroke.Color = Color3.new(1, 1, 1)
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Name = "RainbowGradient"
+        gradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 149, 237)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+        })
+        gradient.Enabled = true
+        gradient.Offset = Vector2.new(0, 0)
+
+        stroke.Parent = mainContainer
+        gradient.Parent = stroke
+
+        task.spawn(function()
+            local rotationSpeed = 35
+            while mainContainer and mainContainer.Parent do
+                local deltaTime = task.wait(0.1)
+                gradient.Rotation = (gradient.Rotation + rotationSpeed * 0.1) % 360
+            end
+        end)
+    end
+end
+
+local Tabs = {
+    Tabgn = Window:Tab({ Title = "功能", Icon = "info" }),
+}
+
+-- ===== Gain Strength 功能 =====
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local GainStrength = ReplicatedStorage
+    :WaitForChild("Remotes")
+    :WaitForChild("Server")
+    :WaitForChild("GainStrength")
+
+local running = false
+
+-- 在 Tabgn 标签页中创建 Toggle 开关
+local gainStrengthToggle = Tabs.Tabgn:Toggle({
+    Title = "Gain Strength",
+    Desc = "开启/关闭自动 Gain Strength",
+    Default = false,
+    Callback = function(value)
+        running = value
+    end,
+})
+
+-- 循环逻辑
+task.spawn(function()
+    while true do
+        task.wait(0.001)
+        if running then
+            GainStrength:FireServer()
+        end
+    end
+end)
+
+-- ===== PunchWall 功能 =====
+local PunchWall = ReplicatedStorage
+    :WaitForChild("Remotes")
+    :WaitForChild("Server")
+    :WaitForChild("PunchWall")
+
+-- 用于存放当前要破坏的门编号，默认 1
+local wallNumber = 1
+
+-- 创建输入框：让用户可以自己填写第几道门
+local wallInput = Tabs.Tabgn:Input({
+    Title = "破坏第几道门",
+    Desc = "输入门的编号（数字），然后点击下方按钮触发",
+    Placeholder = "输入数字，例如 1",
+    Default = "1",
+    Callback = function(value)
+        local num = tonumber(value)
+        if num then
+            wallNumber = num
+        end
+    end,
+})
+
+-- 按钮 1：单次触发 PunchWall
+local punchOnceBtn = Tabs.Tabgn:Button({
+    Title = "破坏指定门（单次）",
+    Desc = "按当前填写的编号，向服务器发送一次 PunchWall",
+    Callback = function()
+        local args = { wallNumber }
+        PunchWall:FireServer(unpack(args))
+    end,
+})
+
+-- 按钮 2：持续触发 PunchWall
+local punchRunning = false
+
+local punchToggle = Tabs.Tabgn:Toggle({
+    Title = "持续破坏当前门",
+    Desc = "开启后每隔 0.1 秒自动发送 PunchWall",
+    Default = false,
+    Callback = function(value)
+        punchRunning = value
+    end,
+})
+
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if punchRunning then
+            local args = { wallNumber }
+            PunchWall:FireServer(unpack(args))
+        end
+    end
+end)
+
 end
