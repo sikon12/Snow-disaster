@@ -1,0 +1,366 @@
+local WindUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
+))()
+
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+
+    local length = #chars
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+
+        result = result .. string.format(
+            '<font color="rgb(%d,%d,%d)">%s</font>',
+            math.floor(r * 255),
+            math.floor(g * 255),
+            math.floor(b * 255),
+            chars[i]
+        )
+    end
+
+    return result
+end
+
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local placeName = game.Name
+local ok, info = pcall(function()
+    return MarketplaceService:GetProductInfo(game.PlaceId)
+end)
+
+if ok and info then
+    placeName = info.Name
+end
+
+local Window = WindUI:CreateWindow({
+    Title = gradient("Snow disaster HUB", Color3.fromHex("#000080"), Color3.fromHex("#00FFFF")),
+    Author = gradient("司空", Color3.fromHex("#00FFAA"), Color3.fromHex("#00AAFF")),
+    Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+    IconThemed = true,
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 270),
+    Transparent = true,
+    Theme = "Dark",
+    Background = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/40597de97c2622ae03913003e0f360bb4e7ff9fa/u%3D2512903668%2C3742891092%26fm%3D253%26fmt%3Dauto%26app%3D138%26f%3DJPEG.webp",
+    SideBarWidth = 200,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    OpenButton = {
+        Title = "Snow disaster HUB",
+        Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+        CornerRadius = UDim.new(0, 8),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(
+            Color3.fromHex("FFFFFF"),
+            Color3.fromHex("0000FF")
+        ),
+        Draggable = true,
+    },
+})
+
+do
+    local mainContainer = Window.UIElements and Window.UIElements.Main
+    if mainContainer then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "RainbowStroke"
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+        local rainbow = Instance.new("UIGradient")
+        rainbow.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 149, 237)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+        })
+
+        stroke.Parent = mainContainer
+        rainbow.Parent = stroke
+
+        task.spawn(function()
+            while mainContainer and mainContainer.Parent do
+                rainbow.Rotation = (rainbow.Rotation + 3.5) % 360
+                task.wait(0.03)
+            end
+        end)
+    end
+end
+
+local Tag = Window:Tag({
+    Title = placeName,
+    Radius = 5,
+    Color = Color3.fromHex("#ADD8E6"),
+    Border = true,
+})
+
+local Tabs = {
+    Tabgn = Window:Tab({
+        Title = "功能",
+        Icon = "info",
+    }),
+}
+
+-- ===================== ESP 功能 =====================
+
+-- 物品名称 → 中文显示名 对照表
+local itemNameMap = {
+    ["Tray"] = "托盘",
+    ["Spatula"] = "锅铲",
+    ["Shells"] = "子弹壳",
+    ["Screws"] = "螺丝",
+    ["Scrap"] = "废金属",
+    ["Pistol Ammo"] = "手枪弹药",
+    ["Medium Ammo"] = "中口径弹药",
+    ["Long Ammo"] = "长口径弹药",
+    ["Fuel"] = "燃料",
+    ["Chips"] = "薯片",
+    ["Bloxy Cola"] = "布洛可乐",
+    ["Bloxiade"] = "布洛西亚德",
+    ["Beans"] = "豆子",
+    ["Battery Pack"] = "电池组",
+    ["Battery"] = "电池",
+}
+
+-- 下拉框显示的选项（中文名）
+local dropdownOptions = {}
+for eng, chn in pairs(itemNameMap) do
+    table.insert(dropdownOptions, chn)
+end
+table.sort(dropdownOptions, function(a, b) return a < b end)
+
+-- 反向查找：中文名 → 英文名
+local function chnToEng(chnName)
+    for eng, chn in pairs(itemNameMap) do
+        if chn == chnName then
+            return eng
+        end
+    end
+    return chnName
+end
+
+local espEnabled = false
+local selectedItems = {}  -- 存储选中的英文名
+local espHighlights = {}  -- 存储所有ESP效果
+
+-- 创建单个物品的ESP
+local function createESPForItem(item)
+    if not item:IsA("Model") and not item:IsA("BasePart") then return end
+
+    -- 检查是否已存在ESP
+    if item:FindFirstChild("ESP_Highlight") then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESP_Highlight"
+    highlight.FillColor = Color3.fromRGB(255, 50, 50)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0.2
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Adornee = item
+    highlight.Parent = item
+
+    -- 创建名称标签
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ESP_Label"
+    billboard.Size = UDim2.new(0, 120, 0, 18)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Adornee = item
+    billboard.Parent = item
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = itemNameMap[item.Name] or item.Name
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.Font = Enum.Font.Gotham
+    textLabel.TextSize = 12
+    textLabel.Parent = billboard
+
+    table.insert(espHighlights, {highlight = highlight, billboard = billboard, item = item})
+end
+
+-- 扫描并创建ESP
+local function scanAndCreateESP()
+    -- 清理旧的ESP
+    for _, esp in pairs(espHighlights) do
+        if esp.highlight then esp.highlight:Destroy() end
+        if esp.billboard then esp.billboard:Destroy() end
+    end
+    espHighlights = {}
+
+    if not espEnabled then return end
+
+    local workspace = game:GetService("Workspace")
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if itemNameMap[obj.Name] and selectedItems[obj.Name] then
+            if obj:IsA("Model") or obj:IsA("BasePart") then
+                createESPForItem(obj)
+            end
+        end
+    end
+end
+
+-- 多选下拉框（Multi-Select Dropdown）
+local Dropdown = Tabs.Tabgn:Dropdown({
+    Title = "ESP 物品选择",
+    Desc = "勾选需要ESP显示的物品（可多选）",
+    Values = dropdownOptions,
+    Multi = true,          -- 开启多选
+    AllowNone = true,      -- 允许不选
+    SearchBarEnabled = true,
+    Callback = function(selected)
+        -- selected 是 table，包含选中的中文名
+        selectedItems = {}
+        for _, chnName in pairs(selected) do
+            local engName = chnToEng(chnName)
+            selectedItems[engName] = true
+        end
+        -- 如果ESP已开启，重新扫描
+        if espEnabled then
+            scanAndCreateESP()
+        end
+    end
+})
+
+-- 开关 Toggle
+local Toggle = Tabs.Tabgn:Toggle({
+    Title = "ESP 开关",
+    Desc = "开启/关闭物品ESP高亮",
+    Value = false,
+    Callback = function(state)
+        espEnabled = state
+        if state then
+            scanAndCreateESP()
+        else
+            -- 关闭时清除所有ESP
+            for _, esp in pairs(espHighlights) do
+                if esp.highlight then esp.highlight:Destroy() end
+                if esp.billboard then esp.billboard:Destroy() end
+            end
+            espHighlights = {}
+        end
+    end
+})
+
+-- ===================== 传送到物品功能 =====================
+
+-- 传送按钮 Button（你传送到最近的已选物品）
+local TeleportButton = Tabs.Tabgn:Button({
+    Title = "传送到最近物品",
+    Desc = "点击后你将传送到距离最近的一个已选物品旁边",
+    Callback = function()
+        local player = game:GetService("Players").LocalPlayer
+        local character = player.Character
+        if not character then return end
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- 检查是否有选中物品
+        if not next(selectedItems) then
+            WindUI:Notify({
+                Title = "提示",
+                Content = "请先在列表中选择至少一个物品",
+                Duration = 2,
+            })
+            return
+        end
+
+        local myPos = hrp.Position
+        local closestItem = nil
+        local closestDist = math.huge
+
+        -- 遍历Workspace，找最近的已选物品
+        for _, obj in pairs(game:GetService("Workspace"):GetDescendants()) do
+            if itemNameMap[obj.Name] and selectedItems[obj.Name] then
+                local part = nil
+                if obj:IsA("Model") then
+                    part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                elseif obj:IsA("BasePart") then
+                    part = obj
+                end
+                if part then
+                    local dist = (part.Position - myPos).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        closestItem = part
+                    end
+                end
+            end
+        end
+
+        if closestItem then
+            -- 传送到物品位置（上方3格，避免卡进去）
+            hrp.CFrame = CFrame.new(closestItem.Position + Vector3.new(0, 3, 0))
+            WindUI:Notify({
+                Title = "传送成功",
+                Content = "已传送到 " .. (itemNameMap[closestItem.Parent.Name] or closestItem.Parent.Name),
+                Duration = 2,
+            })
+        else
+            WindUI:Notify({
+                Title = "提示",
+                Content = "未找到已选中的物品",
+                Duration = 2,
+            })
+        end
+    end
+})
+
+-- ===================== 自动杀戮僵尸功能 =====================
+
+local autoKillEnabled = false
+local autoKillConnection = nil
+
+local KillToggle = Tabs.Tabgn:Toggle({
+    Title = "自动杀戮僵尸",
+    Desc = "开启后自动攻击周围僵尸（间隔0.01秒）",
+    Value = false,
+    Callback = function(state)
+        autoKillEnabled = state
+
+        if state then
+            autoKillConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                local player = game:GetService("Players").LocalPlayer
+                local character = player.Character
+                if not character then return end
+
+                local bat = character:FindFirstChild("Bat")
+                if not bat then return end
+
+                local hitTargets = bat:FindFirstChild("HitTargets")
+                if not hitTargets then return end
+
+                local characters = workspace:WaitForChild("Characters")
+                local zombie = characters:FindFirstChild("Zombie")
+                if not zombie then return end
+
+                local zombieHumanoid = zombie:FindFirstChild("Humanoid")
+                if zombieHumanoid and zombieHumanoid.Health > 0 then
+                    local args = {
+                        {
+                            zombie
+                        }
+                    }
+                    hitTargets:FireServer(unpack(args))
+                end
+
+                task.wait(0.01)
+            end)
+        else
+            if autoKillConnection then
+                autoKillConnection:Disconnect()
+                autoKillConnection = nil
+            end
+        end
+    end
+})
