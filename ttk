@@ -1,0 +1,843 @@
+local WindUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
+))()
+
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+
+    local length = #chars
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+
+        result = result .. string.format(
+            '<font color="rgb(%d,%d,%d)">%s</font>',
+            math.floor(r * 255),
+            math.floor(g * 255),
+            math.floor(b * 255),
+            chars[i]
+        )
+    end
+
+    return result
+end
+
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local placeName = game.Name
+local ok, info = pcall(function()
+    return MarketplaceService:GetProductInfo(game.PlaceId)
+end)
+
+if ok and info then
+    placeName = info.Name
+end
+
+local Window = WindUI:CreateWindow({
+    Title = gradient("Snow disaster HUB", Color3.fromHex("#000080"), Color3.fromHex("#00FFFF")),
+    Author = gradient("司空", Color3.fromHex("#00FFAA"), Color3.fromHex("#00AAFF")),
+    Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+    IconThemed = true,
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 270),
+    Transparent = true,
+    Theme = "Dark",
+    Background = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/40597de97c2622ae03913003e0f360bb4e7ff9fa/u%3D2512903668%2C3742891092%26fm%3D253%26fmt%3Dauto%26app%3D138%26f%3DJPEG.webp",
+    SideBarWidth = 200,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    OpenButton = {
+        Title = "Snow disaster HUB",
+        Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+        CornerRadius = UDim.new(0, 8),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(
+            Color3.fromHex("FFFFFF"),
+            Color3.fromHex("0000FF")
+        ),
+        Draggable = true,
+    },
+})
+
+do
+    local mainContainer = Window.UIElements and Window.UIElements.Main
+    if mainContainer then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "RainbowStroke"
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+        local rainbow = Instance.new("UIGradient")
+        rainbow.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 149, 237)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+        })
+
+        stroke.Parent = mainContainer
+        rainbow.Parent = stroke
+
+        task.spawn(function()
+            while mainContainer and mainContainer.Parent do
+                rainbow.Rotation = (rainbow.Rotation + 3.5) % 360
+                task.wait(0.03)
+            end
+        end)
+    end
+end
+
+local Tag = Window:Tag({
+    Title = placeName,
+    Radius = 5,
+    Color = Color3.fromHex("#ADD8E6"),
+    Border = true,
+})
+
+local Tabs = {
+    Tabgn = Window:Tab({
+        Title = "功能",
+        Icon = "info",
+    }),
+}
+
+-- ============================================================
+-- Ragebot 逻辑（通过 UI 开关控制）
+-- ============================================================
+
+local cloneref = cloneref or function(obj) return obj end
+
+local Players = cloneref(game:GetService("Players"))
+local RunService = cloneref(game:GetService("RunService"))
+local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
+local CollectionService = cloneref(game:GetService("CollectionService"))
+local StarterGui = cloneref(game:GetService("StarterGui"))
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- 等待关键 Remote 存在
+local remotes = ReplicatedStorage:WaitForChild("Remotes", 30)
+local combat = remotes and remotes:WaitForChild("Combat", 30)
+local MercHitClaim = combat and cloneref(combat:WaitForChild("MercHitClaim", 30))
+local WeaponFired = combat and cloneref(combat:WaitForChild("WeaponFired", 30))
+
+local WeaponsRegistry = require(ReplicatedStorage.Registries.Weapons)
+local BulletController = require(ReplicatedStorage.Modules.Client.Controllers.BulletController)
+
+-- Ragebot 状态
+local ragebotEnabled = false
+local heartbeatConn = nil
+local hitConn = nil
+local killConn = nil
+
+-- 运行时数据
+local currentWeaponName = nil
+local currentFireRate = 0.08
+local attackCount = 0
+local lastAttackTime = 0
+local killCount = 0
+local hitCount = 0
+
+local BODY_PARTS = {"Head", "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg"}
+local RANDOM_BODYPART_ENABLED = true
+
+local function newObject(className, properties)
+	local obj = Instance.new(className)
+	for prop, value in pairs(properties) do
+		obj[prop] = value
+	end
+	return obj
+end
+
+local BEAM_SKINS = {
+	["Galaxy"] = {
+		Beam = {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 59, 255)),
+				ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 59, 255))
+			}),
+			LightEmission = 0.2
+		},
+		Particle = newObject("ParticleEmitter", {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.new(0.419608, 0.376471, 1)),
+				ColorSequenceKeypoint.new(1, Color3.new(0.419608, 0.376471, 1))
+			}),
+			Enabled = true,
+			Lifetime = NumberRange.new(1, 1),
+			LightEmission = 0.699999988079071,
+			LockedToPart = true,
+			Rate = 3,
+			RotSpeed = NumberRange.new(0, 15),
+			Rotation = NumberRange.new(0, 360),
+			Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.5, 0),
+				NumberSequenceKeypoint.new(0.496, 1.2, 0),
+				NumberSequenceKeypoint.new(1, 0.5, 0)
+			}),
+			Speed = NumberRange.new(1, 1),
+			SpreadAngle = Vector2.new(-45, 45),
+			Squash = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0, 0),
+				NumberSequenceKeypoint.new(0.173364, 0.525, 0),
+				NumberSequenceKeypoint.new(0.584386, -1.7625, 0),
+				NumberSequenceKeypoint.new(0.98163, 0.0749998, 0),
+				NumberSequenceKeypoint.new(1, 0, 0)
+			}),
+			Texture = "rbxassetid://7422600824",
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0, 0),
+				NumberSequenceKeypoint.new(0.107922, 1, 0),
+				NumberSequenceKeypoint.new(0.391504, 0.25, 0),
+				NumberSequenceKeypoint.new(0.670494, 0.78125, 0),
+				NumberSequenceKeypoint.new(0.845006, 0, 0),
+				NumberSequenceKeypoint.new(1, 1, 0)
+			}),
+			ZOffset = 1
+		})
+	},
+	["Fish"] = {
+		Beam = {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 85, 255)),
+				ColorSequenceKeypoint.new(0.507, Color3.fromRGB(0, 170, 255)),
+				ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 255, 127))
+			}),
+			LightEmission = 0.8
+		},
+		Particle = newObject("ParticleEmitter", {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.new(1, 0.333333, 1)),
+				ColorSequenceKeypoint.new(0.509, Color3.new(0, 0.666667, 1)),
+				ColorSequenceKeypoint.new(1, Color3.new(0.666667, 1, 0.498039))
+			}),
+			Enabled = true,
+			Lifetime = NumberRange.new(1.2, 1.2),
+			LightEmission = 1,
+			LockedToPart = true,
+			Rate = 8,
+			Rotation = NumberRange.new(0, 360),
+			Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0, 0),
+				NumberSequenceKeypoint.new(0.0955, 2.6, 0),
+				NumberSequenceKeypoint.new(1, 2.6, 0)
+			}),
+			Speed = NumberRange.new(0.1, 0.1),
+			Texture = "http://www.roblox.com/asset/?id=11442980892",
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.5, 0),
+				NumberSequenceKeypoint.new(1, 0.5, 0)
+			}),
+			ZOffset = -1
+		}),
+		ParticleEmit = 1
+	},
+	["Heaven"] = {
+		Beam = {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+				ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+			}),
+			LightEmission = 1
+		},
+		PulloutAnimation = "rbxassetid://14500266726",
+		PulloutSound = "rbxassetid://14489860007",
+		PulloutVolume = 1
+	},
+	["DH-Stars"] = {
+		ShotParticle = newObject("ParticleEmitter", {
+			Lifetime = NumberRange.new(0.4, 0.4),
+			LightEmission = 0.25,
+			Orientation = Enum.ParticleOrientation.VelocityPerpendicular,
+			Rate = 0,
+			RotSpeed = NumberRange.new(0, 40),
+			Rotation = NumberRange.new(0, 90),
+			Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.813, 0),
+				NumberSequenceKeypoint.new(1, 0, 0)
+			}),
+			Speed = NumberRange.new(0, 5),
+			SpreadAngle = Vector2.new(-90, 90),
+			Squash = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0, 0),
+				NumberSequenceKeypoint.new(0.513, 1.09, 0),
+				NumberSequenceKeypoint.new(1, 0, 0)
+			}),
+			Texture = "http://www.roblox.com/asset/?id=198887652",
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0, 0),
+				NumberSequenceKeypoint.new(1, 1, 0)
+			})
+		}),
+		ParticleEmit = 1
+	},
+	["8-BIT"] = {
+		Beam = {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 242, 255)),
+				ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 242, 255))
+			}),
+			LightEmission = 1
+		}
+	},
+	["Matrix"] = {
+		Beam = {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(41, 141, 33)),
+				ColorSequenceKeypoint.new(1, Color3.fromRGB(41, 141, 33))
+			}),
+			LightEmission = 0.5
+		},
+		ShotParticle = newObject("ParticleEmitter", {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.new(0.411765, 0.901961, 0.105882)),
+				ColorSequenceKeypoint.new(1, Color3.new(0.411765, 0.901961, 0.105882))
+			}),
+			Enabled = false,
+			Lifetime = NumberRange.new(0.4, 0.4),
+			Rate = 1,
+			RotSpeed = NumberRange.new(0, 90),
+			Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.2, 0),
+				NumberSequenceKeypoint.new(1, 0.2, 0)
+			}),
+			SpreadAngle = Vector2.new(-45, 45),
+			Texture = "http://www.roblox.com/asset/?id=119971173",
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0, 0),
+				NumberSequenceKeypoint.new(1, 1, 0)
+			}),
+			ZOffset = 1
+		}),
+		ShotParticle2 = newObject("ParticleEmitter", {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.new(0.411765, 0.901961, 0.105882)),
+				ColorSequenceKeypoint.new(1, Color3.new(0.411765, 0.901961, 0.105882))
+			}),
+			Enabled = false,
+			Lifetime = NumberRange.new(0.4, 0.4),
+			Rate = 1,
+			RotSpeed = NumberRange.new(0, 90),
+			Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.2, 0),
+				NumberSequenceKeypoint.new(1, 0.2, 0)
+			}),
+			SpreadAngle = Vector2.new(-45, 45),
+			Texture = "http://www.roblox.com/asset/?id=119971193",
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0, 0),
+				NumberSequenceKeypoint.new(1, 1, 0)
+			}),
+			ZOffset = 1
+		}),
+		ParticleEmit = 1
+	}
+}
+
+local skinNames = {"Galaxy", "Fish", "Heaven", "DH-Stars", "8-BIT", "Matrix"}
+
+-- 子弹轨迹 & 命中模型文件夹
+local beamFolder = Instance.new("Folder")
+beamFolder.Name = "BulletTracers"
+beamFolder.Parent = workspace
+
+local hitModelFolder = Instance.new("Folder")
+hitModelFolder.Name = "HitModels"
+hitModelFolder.Parent = workspace
+
+-- HUD
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "RagebotStats"
+screenGui.ResetOnSpawn = false
+screenGui.Enabled = false
+screenGui.Parent = playerGui
+
+local weaponLabel = Instance.new("TextLabel")
+weaponLabel.Name = "WeaponLabel"
+weaponLabel.Size = UDim2.new(0, 250, 0, 25)
+weaponLabel.Position = UDim2.new(0, 10, 0, 10)
+weaponLabel.BackgroundTransparency = 1
+weaponLabel.Font = Enum.Font.GothamBold
+weaponLabel.TextSize = 16
+weaponLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+weaponLabel.Text = ""
+weaponLabel.TextXAlignment = Enum.TextXAlignment.Left
+weaponLabel.TextStrokeTransparency = 0.5
+weaponLabel.Parent = screenGui
+
+local statsLabel = Instance.new("TextLabel")
+statsLabel.Name = "StatsLabel"
+statsLabel.Size = UDim2.new(0, 250, 0, 25)
+statsLabel.Position = UDim2.new(0, 10, 0, 35)
+statsLabel.BackgroundTransparency = 1
+statsLabel.Font = Enum.Font.Gotham
+statsLabel.TextSize = 14
+statsLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+statsLabel.Text = ""
+statsLabel.TextXAlignment = Enum.TextXAlignment.Left
+statsLabel.TextStrokeTransparency = 0.5
+statsLabel.Parent = screenGui
+
+local targetLabel = Instance.new("TextLabel")
+targetLabel.Name = "TargetLabel"
+targetLabel.Size = UDim2.new(0, 250, 0, 25)
+targetLabel.Position = UDim2.new(0, 10, 0, 60)
+targetLabel.BackgroundTransparency = 1
+targetLabel.Font = Enum.Font.Gotham
+targetLabel.TextSize = 14
+targetLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+targetLabel.Text = ""
+targetLabel.TextXAlignment = Enum.TextXAlignment.Left
+targetLabel.TextStrokeTransparency = 0.5
+targetLabel.Parent = screenGui
+
+local currentTarget = "无"
+local currentBodyPart = "无"
+
+local function getRandomBeamSkin()
+	local skinName = skinNames[math.random(1, #skinNames)]
+	return BEAM_SKINS[skinName]
+end
+
+local function createLayeredGlow(part, mainColor, glowColor)
+	local isHead = part.Name == "Head"
+	
+	local baseColor = Color3.new(glowColor.R * 5, glowColor.G * 5, glowColor.B * 5)
+	
+	local glowAdornment
+	if isHead then
+		glowAdornment = Instance.new("CylinderHandleAdornment")
+		glowAdornment.Height = part.Size.Y + 0.03
+		glowAdornment.Radius = (part.Size.X * 0.5) + 0.03
+		glowAdornment.CFrame = CFrame.new(Vector3.new(0, 0, 0), Vector3.new(0, 1, 0))
+	else
+		glowAdornment = Instance.new("BoxHandleAdornment")
+		glowAdornment.Size = part.Size + Vector3.new(0.03, 0.03, 0.03)
+	end
+	
+	glowAdornment.Name = "Chams"
+	glowAdornment.AlwaysOnTop = true
+	glowAdornment.ZIndex = isHead and 10 or 9
+	glowAdornment.Adornee = part
+	glowAdornment.Color3 = baseColor
+	glowAdornment.Transparency = -1
+	glowAdornment.Shading = Enum.AdornShading.XRayShaded
+	glowAdornment.Parent = part
+	
+	local mainAdornment
+	if isHead then
+		mainAdornment = Instance.new("CylinderHandleAdornment")
+		mainAdornment.Height = part.Size.Y + 0.02
+		mainAdornment.Radius = (part.Size.X * 0.5) + 0.02
+		mainAdornment.CFrame = CFrame.new(Vector3.new(0, 0, 0), Vector3.new(0, 1, 0))
+	else
+		mainAdornment = Instance.new("BoxHandleAdornment")
+		mainAdornment.Size = part.Size + Vector3.new(0.02, 0.02, 0.02)
+	end
+	
+	mainAdornment.Name = "Chams"
+	mainAdornment.AlwaysOnTop = true
+	mainAdornment.ZIndex = 10
+	mainAdornment.Adornee = part
+	mainAdornment.Color3 = mainColor
+	mainAdornment.Transparency = 0
+	mainAdornment.Parent = part
+	
+	return glowAdornment, mainAdornment
+end
+
+local function createHitModel(targetChar, hitPos, skinColor)
+	if not targetChar then return end
+	
+	local clonedModel = targetChar:Clone()
+	clonedModel.Name = "HitClone"
+	clonedModel.Parent = hitModelFolder
+	
+	for _, part in ipairs(clonedModel:GetDescendants()) do
+		if part:IsA("BasePart") then
+			createLayeredGlow(part, skinColor, skinColor)
+		end
+		
+		if part:IsA("Script") or part:IsA("LocalScript") or part:IsA("ModuleScript") then
+			part:Destroy()
+		end
+		
+		if part:IsA("Humanoid") then
+			part:Destroy()
+		end
+	end
+	
+	if clonedModel.PrimaryPart then
+		clonedModel:SetPrimaryPartCFrame(CFrame.new(hitPos))
+	elseif clonedModel:FindFirstChild("HumanoidRootPart") then
+		clonedModel.HumanoidRootPart.CFrame = CFrame.new(hitPos)
+	end
+	
+	task.delay(5, function()
+		clonedModel:Destroy()
+	end)
+end
+
+local function createBulletBeam(origin, hitPos, targetChar)
+	local skin = getRandomBeamSkin()
+	
+	local att0 = Instance.new("Attachment")
+	att0.Position = Vector3.new(0, 0, 0)
+	att0.Parent = workspace.Terrain
+	att0.WorldPosition = origin
+	
+	local att1 = Instance.new("Attachment")
+	att1.Position = Vector3.new(0, 0, 0)
+	att1.Parent = workspace.Terrain
+	att1.WorldPosition = hitPos
+	
+	local beam = Instance.new("Beam")
+	beam.FaceCamera = true
+	beam.Width0 = 0.2
+	beam.Width1 = 0.2
+	beam.Color = skin.Beam.Color
+	beam.LightEmission = skin.Beam.LightEmission or 1
+	beam.LightInfluence = 0
+	beam.Transparency = NumberSequence.new(0.1)
+	beam.Attachment0 = att0
+	beam.Attachment1 = att1
+	beam.Parent = beamFolder
+	
+	if skin.Particle then
+		local particle = skin.Particle:Clone()
+		particle.Parent = att1
+	end
+	
+	if skin.ShotParticle then
+		local shotParticle = skin.ShotParticle:Clone()
+		shotParticle.Parent = att1
+		if skin.ParticleEmit then
+			shotParticle:Emit(skin.ParticleEmit)
+		end
+	end
+	
+	if skin.ShotParticle2 then
+		local shotParticle2 = skin.ShotParticle2:Clone()
+		shotParticle2.Parent = att1
+		if skin.ParticleEmit then
+			shotParticle2:Emit(skin.ParticleEmit)
+		end
+	end
+	
+	local beamColor = skin.Beam.Color.Keypoints[1].Value
+	createHitModel(targetChar, hitPos, beamColor)
+	
+	task.delay(5, function()
+		beam:Destroy()
+		att0:Destroy()
+		att1:Destroy()
+	end)
+end
+
+local function sendNotification(title, text)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = title,
+			Text = text,
+			Duration = 2
+		})
+	end)
+end
+
+local function getWeaponFireRate(weaponName)
+	if WeaponsRegistry and WeaponsRegistry[weaponName] then
+		local weaponData = WeaponsRegistry[weaponName]
+		if weaponData.FireRate and type(weaponData.FireRate) == "number" then
+			return weaponData.FireRate * 2
+		end
+	end
+	return 0.16
+end
+
+local function getRandomBodyPart()
+	if RANDOM_BODYPART_ENABLED then
+		return BODY_PARTS[math.random(1, #BODY_PARTS)]
+	end
+	return nil
+end
+
+local function getCurrentWeapon()
+	local attrWeapon = player:GetAttribute("CurrentWeapon")
+	if attrWeapon and typeof(attrWeapon) == "string" then
+		return attrWeapon
+	end
+	
+	local char = player.Character
+	if char then
+		for _, child in ipairs(char:GetChildren()) do
+			if child:IsA("Tool") then
+				return child.Name
+			end
+		end
+		for _, child in ipairs(char:GetChildren()) do
+			if child:IsA("Model") then
+				local hasBarrel = child:FindFirstChild("Barrel")
+				local hasMagazine = child:FindFirstChild("Magazine")
+				local hasHandle = child:FindFirstChild("Handle")
+				
+				if (hasBarrel and hasMagazine) or (hasBarrel and hasHandle) then
+					return child.Name
+				end
+			end
+		end
+	end
+	
+	local cam = workspace.CurrentCamera
+	if cam then
+		for _, child in ipairs(cam:GetChildren()) do
+			if child:IsA("Model") then
+				local hasBarrel = child:FindFirstChild("Barrel")
+				local hasMagazine = child:FindFirstChild("Magazine")
+				local hasHandle = child:FindFirstChild("Handle")
+				
+				if (hasBarrel and hasMagazine) or (hasBarrel and hasHandle) then
+					return child.Name
+				end
+			end
+		end
+	end
+	
+	return nil
+end
+
+local function isDead(part)
+	local check = part
+	while check and check ~= workspace do
+		if check:GetAttribute("Dead") == true then
+			return true
+		end
+		check = check.Parent
+	end
+	return false
+end
+
+local function hasWallBetween(fromPos, toPos)
+	local direction = (toPos - fromPos)
+	local distance = direction.Magnitude
+	
+	if distance < 0.1 then return false end
+	
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	
+	local filterList = {}
+	table.insert(filterList, player.Character)
+	table.insert(filterList, workspace.CurrentCamera)
+	
+	local mercPlayers = workspace:FindFirstChild("MercPlayers")
+	if mercPlayers then
+		table.insert(filterList, mercPlayers)
+	end
+	
+	local activeMap = workspace:FindFirstChild("ActiveMap") or workspace:FindFirstChild("Map")
+	if activeMap then
+		local touchables = activeMap:FindFirstChild("Touchables")
+		if touchables then
+			table.insert(filterList, touchables)
+		end
+		local ignore = activeMap:FindFirstChild("Ignore")
+		if ignore then
+			table.insert(filterList, ignore)
+		end
+	end
+	
+	local ignoreFolder = workspace:FindFirstChild("Ignore")
+	if ignoreFolder then
+		table.insert(filterList, ignoreFolder)
+	end
+	
+	raycastParams.FilterDescendantsInstances = filterList
+	
+	local rayResult = workspace:Raycast(fromPos, direction.Unit * (distance - 0.1), raycastParams)
+	
+	return rayResult ~= nil
+end
+
+local function getClosestTarget()
+	local char = player.Character
+	if not char then return nil, nil, nil, nil, nil end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return nil, nil, nil, nil, nil end
+
+	local myUserId = player.UserId
+	local closestDist = math.huge
+	local closestUserId = nil
+	local closestHitPos = nil
+	local closestBodyPart = nil
+	local closestChar = nil
+
+	local tagged = CollectionService:GetTagged("MercBodyPart")
+	for _, part in ipairs(tagged) do
+		if part:IsA("BasePart") and part.Parent then
+			if isDead(part) then
+				continue
+			end
+
+			local ownerId = part:GetAttribute("OwnerUserId")
+			local bodyPartName = part:GetAttribute("MercBodyPart")
+			local targetChar = part:FindFirstAncestorOfClass("Model")
+
+			if not ownerId or not bodyPartName then
+				if targetChar then
+					ownerId = ownerId or targetChar:GetAttribute("OwnerUserId")
+					bodyPartName = bodyPartName or part.Name
+				end
+			end
+
+			if ownerId and typeof(ownerId) == "number" and ownerId ~= myUserId and bodyPartName then
+				local dist = (root.Position - part.Position).Magnitude
+				if dist < closestDist then
+					if not hasWallBetween(root.Position, part.Position) then
+						closestDist = dist
+						closestUserId = ownerId
+						closestHitPos = part.Position
+						closestBodyPart = bodyPartName
+						closestChar = targetChar
+					end
+				end
+			end
+		end
+	end
+
+	if closestUserId and closestHitPos and closestBodyPart then
+		local direction = (closestHitPos - root.Position).Unit
+		return closestUserId, closestHitPos, direction, closestBodyPart, closestChar
+	end
+	return nil, nil, nil, nil, nil
+end
+
+-- ============================================================
+-- 启动 / 停止 Ragebot
+-- ============================================================
+local shotSequence = 0
+
+local function startRagebot()
+	if ragebotEnabled then return end
+	ragebotEnabled = true
+	screenGui.Enabled = true
+
+	-- Hit / Kill 事件监听
+	hitConn = BulletController.HitConfirmed:Connect(function()
+		hitCount = hitCount + 1
+		statsLabel.Text = string.format("K:%d | H:%d", killCount, hitCount)
+	end)
+
+	killConn = BulletController.KillConfirmed:Connect(function()
+		killCount = killCount + 1
+		statsLabel.Text = string.format("K:%d | H:%d", killCount, hitCount)
+	end)
+
+	-- 主循环
+	heartbeatConn = RunService.Heartbeat:Connect(function()
+		local weapon = getCurrentWeapon()
+		if not weapon then return end
+
+		if weapon ~= currentWeaponName then
+			currentWeaponName = weapon
+			currentFireRate = getWeaponFireRate(weapon)
+			local rpm = math.floor(60 / currentFireRate)
+			weaponLabel.Text = string.format("%s | %d RPM", weapon, rpm)
+			statsLabel.Text = string.format("K:%d | H:%d", killCount, hitCount)
+			sendNotification("武器识别", string.format("%s | %d RPM", weapon, rpm))
+			print(string.format("[自动识别] 武器: %s | 射速: %.3f秒 | %d RPM", weapon, currentFireRate, rpm))
+		end
+
+		local currentTime = tick()
+		if currentTime - lastAttackTime < currentFireRate then
+			return
+		end
+
+		local targetUserId, hitPos, direction, bodyPart, targetChar = getClosestTarget()
+		if not (targetUserId and hitPos and direction and bodyPart) then return end
+
+		local char = player.Character
+		if not char then return end
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+
+		local randomBodyPart = getRandomBodyPart()
+		if randomBodyPart then
+			bodyPart = randomBodyPart
+		end
+
+		local origin = root.Position
+		shotSequence = shotSequence + 1
+		attackCount = attackCount + 1
+		lastAttackTime = currentTime
+		
+		currentTarget = tostring(targetUserId)
+		currentBodyPart = bodyPart
+		
+		WeaponFired:FireServer(weapon, origin, direction, targetUserId, shotSequence)
+		MercHitClaim:FireServer(weapon, targetUserId, bodyPart, origin, direction, hitPos, shotSequence)
+		
+		createBulletBeam(origin, hitPos, targetChar)
+		
+		targetLabel.Text = string.format("目标: #%s | 部位: %s", currentTarget, currentBodyPart)
+		
+		if attackCount % 100 == 0 then
+			print(string.format("[统计] 攻击:%d | 击杀:%d | 命中:%d | 武器:%s", attackCount, killCount, hitCount, weapon))
+		end
+	end)
+
+	sendNotification("Ragebot", "已开启")
+	print("[Ragebot] 已开启")
+end
+
+local function stopRagebot()
+	if not ragebotEnabled then return end
+	ragebotEnabled = false
+	screenGui.Enabled = false
+
+	-- 断开所有连接，强制停止逻辑
+	if heartbeatConn then
+		heartbeatConn:Disconnect()
+		heartbeatConn = nil
+	end
+	if hitConn then
+		hitConn:Disconnect()
+		hitConn = nil
+	end
+	if killConn then
+		killConn:Disconnect()
+		killConn = nil
+	end
+
+	-- 重置状态
+	currentWeaponName = nil
+	currentTarget = "无"
+	currentBodyPart = "无"
+	weaponLabel.Text = ""
+	statsLabel.Text = ""
+	targetLabel.Text = ""
+
+	sendNotification("Ragebot", "已关闭")
+	print("[Ragebot] 已关闭 — 所有逻辑已停止")
+end
+
+-- ============================================================
+-- UI 开关
+-- ============================================================
+Tabs.Tabgn:Toggle({
+	Title = "愤怒机器人",
+	Default = false,
+	Callback = function(state)
+		if state then
+			startRagebot()
+		else
+			stopRagebot()
+		end
+	end,
+})
