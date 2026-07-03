@@ -1,0 +1,239 @@
+local WindUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
+))()
+
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+
+    local length = #chars
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+
+        result = result .. string.format(
+            '<font color="rgb(%d,%d,%d)">%s</font>',
+            math.floor(r * 255),
+            math.floor(g * 255),
+            math.floor(b * 255),
+            chars[i]
+        )
+    end
+
+    return result
+end
+
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local placeName = game.Name
+local ok, info = pcall(function()
+    return MarketplaceService:GetProductInfo(game.PlaceId)
+end)
+
+if ok and info then
+    placeName = info.Name
+end
+
+local Window = WindUI:CreateWindow({
+    Title = gradient("Snow disaster HUB", Color3.fromHex("#000080"), Color3.fromHex("#00FFFF")),
+    Author = gradient("司空", Color3.fromHex("#00FFAA"), Color3.fromHex("#00AAFF")),
+    Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+    IconThemed = true,
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 270),
+    Transparent = true,
+    Theme = "Dark",
+    Background = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/40597de97c2622ae03913003e0f360bb4e7ff9fa/u%3D2512903668%2C3742891092%26fm%3D253%26fmt%3Dauto%26app%3D138%26f%3DJPEG.webp",
+    SideBarWidth = 200,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    OpenButton = {
+        Title = "Snow disaster HUB",
+        Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+        CornerRadius = UDim.new(0, 8),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(
+            Color3.fromHex("FFFFFF"),
+            Color3.fromHex("0000FF")
+        ),
+        Draggable = true,
+    },
+})
+
+-- ✅ 原来的彩虹边框（不变）
+do
+    local mainContainer = Window.UIElements and Window.UIElements.Main
+    if mainContainer then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "RainbowStroke"
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+        local rainbow = Instance.new("UIGradient")
+        rainbow.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 149, 237)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+        })
+
+        stroke.Parent = mainContainer
+        rainbow.Parent = stroke
+
+        task.spawn(function()
+            while mainContainer and mainContainer.Parent do
+                rainbow.Rotation = (rainbow.Rotation + 3.5) % 360
+                task.wait(0.03)
+            end
+        end)
+    end
+end
+
+local Tag = Window:Tag({
+    Title = placeName,
+    Radius = 5,
+    Color = Color3.fromHex("#ADD8E6"),
+    Border = true,
+})
+
+local Tabs = {
+    Tabgn = Window:Tab({
+        Title = "功能",
+        Icon = "info",
+    }),
+}
+
+-- Blur
+local Lighting = game:GetService("Lighting")
+local TweenServiceBlur = game:GetService("TweenService")
+
+local blur = Lighting:FindFirstChildOfClass("BlurEffect")
+if not blur then
+    blur = Instance.new("BlurEffect")
+    blur.Size = 0
+    blur.Parent = Lighting
+end
+
+task.spawn(function()
+    local wasOpen = false
+    while true do
+        task.wait(0.1)
+        local mainFrame = Window.UIElements and Window.UIElements.Main
+        local isOpen = mainFrame and mainFrame.Visible or false
+
+        if isOpen ~= wasOpen then
+            wasOpen = isOpen
+            TweenServiceBlur:Create(blur, TweenInfo.new(0.3), {
+                Size = isOpen and 20 or 0
+            }):Play()
+        end
+    end
+end)
+
+-- =======================
+-- 功能 Toggle（已删除第一个开关）
+-- =======================
+
+Tabs.Tabgn:Section({ Title = "恶搞功能", Icon = "coins" })
+
+-- ✅ 只保留「延长线」
+local extendedLineConn
+local trajectoryParts = {}
+
+Tabs.Tabgn:Toggle({
+    Title = "延长线",
+    Default = false,
+    Callback = function(state)
+        local activeTable =
+            workspace:FindFirstChild("Tables") and (
+                workspace.Tables:FindFirstChild("Table1") or
+                workspace.Tables:FindFirstChild("Table2") or
+                workspace.Tables:FindFirstChild("Table3")
+            )
+
+        if not activeTable then
+            WindUI:Notify({
+                Title = "错误",
+                Content = "未找到球桌 (Table)，请进入对局后再试",
+                Duration = 3
+            })
+            return
+        end
+
+        local Guides = activeTable:FindFirstChild("Guides")
+        local HitTrajectory = Guides and Guides:FindFirstChild("HitTrajectory")
+
+        if not HitTrajectory then
+            WindUI:Notify({
+                Title = "错误",
+                Content = "未找到预测线 (HitTrajectory)",
+                Duration = 3
+            })
+            return
+        end
+
+        local maxSegments = 5
+        local segmentLength = 10
+
+        local function clearTrajectory()
+            for _, part in pairs(trajectoryParts) do
+                if part and part.Parent then
+                    part:Destroy()
+                end
+            end
+            trajectoryParts = {}
+        end
+
+        if extendedLineConn then
+            extendedLineConn:Disconnect()
+            extendedLineConn = nil
+        end
+
+        clearTrajectory()
+
+        if state then
+            local function updateTrajectory()
+                clearTrajectory()
+                local startPos = HitTrajectory.Position
+                local direction = HitTrajectory.CFrame.LookVector.Unit
+                local currentPos = startPos
+
+                for i = 1, maxSegments do
+                    local nextPos = currentPos + direction * segmentLength
+
+                    local line = Instance.new("Part")
+                    line.Size = Vector3.new(0.2, 0.2, segmentLength)
+                    line.CFrame =
+                        CFrame.lookAt(currentPos, nextPos) *
+                        CFrame.new(0, 0, -segmentLength / 2)
+                    line.BrickColor = BrickColor.Green()
+                    line.Anchored = true
+                    line.CanCollide = false
+                    line.Material = Enum.Material.Neon
+                    line.Parent = workspace
+
+                    table.insert(trajectoryParts, line)
+                    currentPos = nextPos
+                end
+            end
+
+            extendedLineConn =
+                HitTrajectory:GetPropertyChangedSignal("CFrame"):Connect(updateTrajectory)
+            updateTrajectory()
+
+            if not getgenv()._ExtendedLines then
+                getgenv()._ExtendedLines = {}
+            end
+            getgenv()._ExtendedLines.Clear = clearTrajectory
+        else
+            if getgenv()._ExtendedLines and getgenv()._ExtendedLines.Clear then
+                getgenv()._ExtendedLines.Clear()
+            end
+        end
+    end
+})
