@@ -72,6 +72,10 @@ local gameConfigs = {
     [137233438285284] = {
         name = "鸡场",
         scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E9%B8%A1%E5%9C%BA"
+    },
+    [132508978828159] = {
+        name = "通过滚动来存活",
+        scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E9%80%9A%E8%BF%87%E6%BB%9A%E5%8A%A8%E6%9D%A5%E7%94%9F%E5%AD%98"
     }
 }
 
