@@ -831,7 +831,7 @@ end
 -- UI 开关
 -- ============================================================
 Tabs.Tabgn:Toggle({
-	Title = "愤怒机器人",
+	Title = "愤怒机器人(eup提供)",
 	Default = false,
 	Callback = function(state)
 		if state then
