@@ -1,0 +1,380 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local WindUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
+))()
+
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+
+    local length = #chars
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+
+        result = result .. string.format(
+            '<font color="rgb(%d,%d,%d)">%s</font>',
+            math.floor(r * 255),
+            math.floor(g * 255),
+            math.floor(b * 255),
+            chars[i]
+        )
+    end
+
+    return result
+end
+
+local placeName = game.Name
+local ok, info = pcall(function()
+    return MarketplaceService:GetProductInfo(game.PlaceId)
+end)
+
+if ok and info then
+    placeName = info.Name
+end
+
+local Window = WindUI:CreateWindow({
+    Title = gradient("Snow disaster HUB", Color3.fromHex("#000080"), Color3.fromHex("#00FFFF")),
+    Author = gradient("司空", Color3.fromHex("#00FFAA"), Color3.fromHex("#00AAFF")),
+    Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+    IconThemed = true,
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 270),
+    Transparent = true,
+    Theme = "Dark",
+    Background = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/40597de97c2622ae03913003e0f360bb4e7ff9fa/u%3D2512903668%2C3742891092%26fm%3D253%26fmt%3Dauto%26app%3D138%26f%3DJPEG.webp",
+    SideBarWidth = 200,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    OpenButton = {
+        Title = "Snow disaster HUB",
+        Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+        CornerRadius = UDim.new(0, 8),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(
+            Color3.fromHex("FFFFFF"),
+            Color3.fromHex("0000FF")
+        ),
+        Draggable = true,
+    },
+})
+
+do
+    local mainContainer = Window.UIElements and Window.UIElements.Main
+    if mainContainer then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "RainbowStroke"
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+        local rainbow = Instance.new("UIGradient")
+        rainbow.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 149, 237)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+        })
+
+        stroke.Parent = mainContainer
+        rainbow.Parent = stroke
+
+        task.spawn(function()
+            while mainContainer and mainContainer.Parent do
+                rainbow.Rotation = (rainbow.Rotation + 3.5) % 360
+                task.wait(0.03)
+            end
+        end)
+    end
+end
+
+local Tag = Window:Tag({
+    Title = placeName,
+    Radius = 5,
+    Color = Color3.fromHex("#ADD8E6"),
+    Border = true,
+})
+
+local AutoDepositEggs = false
+local AutoCollectCash = false
+local AutoCollectEggs = false
+local AutoBuyChickens = false
+local AutoMergeChickens = false
+local FloatEnabled = false
+local FlingAllEnabled = false
+local InfJumpEnabled = false
+
+local DepositEggsConnection = nil
+local CollectCashConnection = nil
+local CollectEggsConnection = nil
+local BuyChickensConnection = nil
+local MergeChickensConnection = nil
+local FloatForce = nil
+local InfJumpConnection = nil
+local FlingAllThread = nil
+
+local function notify(title, content)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = content or "",
+            Duration = 4,
+        })
+    end)
+end
+
+notify("加载完成", "鸡场已加载")
+
+local remoteFunction = ReplicatedStorage:WaitForChild("Paper"):WaitForChild("Remotes"):WaitForChild("__remotefunction")
+
+local function invokeRemote(action, ...)
+    local success, result = pcall(function(...)
+        return remoteFunction:InvokeServer(action, ...)
+    end, ...)
+    if not success then
+        notify("触发失败", tostring(result))
+    end
+    return success, result
+end
+
+local function collectWorkspaceEggs()
+    local eggs = workspace:FindFirstChild("Eggs")
+    if not eggs then return end
+
+    local character = LocalPlayer.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    for _, egg in pairs(eggs:GetChildren()) do
+        if egg:IsA("Model") or egg:IsA("BasePart") then
+            pcall(function()
+                if egg:IsA("BasePart") then
+                    egg.CFrame = hrp.CFrame
+                else
+                    egg:PivotTo(hrp.CFrame)
+                end
+            end)
+        end
+    end
+end
+
+-- ========== 创建 Tab ==========
+local MainTab = Window:Tab({ Title = "自动", Icon = "solar:play-circle-bold" })
+local CharacterTab = Window:Tab({ Title = "人物", Icon = "solar:user-bold" })
+
+-- ========== 自动 Tab ==========
+MainTab:Toggle({
+    Title = "自动存放鸡蛋",
+    Value = false,
+    Callback = function(value)
+        AutoDepositEggs = value
+        if value then
+            DepositEggsConnection = RunService.Heartbeat:Connect(function()
+                if AutoDepositEggs then
+                    invokeRemote("Deposit Eggs")
+                end
+            end)
+        elseif DepositEggsConnection then
+            DepositEggsConnection:Disconnect()
+            DepositEggsConnection = nil
+        end
+    end,
+})
+
+MainTab:Toggle({
+    Title = "自动领取钱",
+    Value = false,
+    Callback = function(value)
+        AutoCollectCash = value
+        if value then
+            CollectCashConnection = RunService.Heartbeat:Connect(function()
+                if AutoCollectCash then
+                    invokeRemote("Collect Cash")
+                end
+            end)
+        elseif CollectCashConnection then
+            CollectCashConnection:Disconnect()
+            CollectCashConnection = nil
+        end
+    end,
+})
+
+MainTab:Toggle({
+    Title = "自动收集鸡蛋",
+    Value = false,
+    Callback = function(value)
+        AutoCollectEggs = value
+        if value then
+            CollectEggsConnection = RunService.Heartbeat:Connect(function()
+                if AutoCollectEggs then
+                    collectWorkspaceEggs()
+                end
+            end)
+        elseif CollectEggsConnection then
+            CollectEggsConnection:Disconnect()
+            CollectEggsConnection = nil
+        end
+    end,
+})
+
+MainTab:Toggle({
+    Title = "自动购买鸡",
+    Value = false,
+    Callback = function(value)
+        AutoBuyChickens = value
+        if value then
+            BuyChickensConnection = RunService.Heartbeat:Connect(function()
+                if AutoBuyChickens then
+                    invokeRemote("Buy Chickens", 1)
+                end
+            end)
+        elseif BuyChickensConnection then
+            BuyChickensConnection:Disconnect()
+            BuyChickensConnection = nil
+        end
+    end,
+})
+
+MainTab:Toggle({
+    Title = "自动合并鸡",
+    Value = false,
+    Callback = function(value)
+        AutoMergeChickens = value
+        if value then
+            MergeChickensConnection = RunService.Heartbeat:Connect(function()
+                if AutoMergeChickens then
+                    invokeRemote("Merge Chickens")
+                end
+            end)
+        elseif MergeChickensConnection then
+            MergeChickensConnection:Disconnect()
+            MergeChickensConnection = nil
+        end
+    end,
+})
+
+-- ========== 人物 Tab ==========
+CharacterTab:Toggle({
+    Title = "漂浮",
+    Value = false,
+    Callback = function(value)
+        FloatEnabled = value
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if FloatEnabled and hrp then
+            if FloatForce then FloatForce:Destroy() end
+            FloatForce = Instance.new("BodyVelocity")
+            FloatForce.Name = "FloatVelocity"
+            FloatForce.MaxForce = Vector3.new(0, 100000, 0)
+            FloatForce.Velocity = Vector3.new(0, 0, 0)
+            FloatForce.Parent = hrp
+        else
+            if FloatForce then
+                FloatForce:Destroy()
+                FloatForce = nil
+            end
+        end
+    end,
+})
+
+CharacterTab:Toggle({
+    Title = "击飞所有",
+    Value = false,
+    Callback = function(value)
+        FlingAllEnabled = value
+        if value then
+            if FlingAllThread then return end
+            FlingAllThread = task.spawn(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hrp and hum then
+                    hum.PlatformStand = true
+                    local spinForce = Instance.new("BodyAngularVelocity")
+                    spinForce.Name = "TrollSpin"
+                    spinForce.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                    spinForce.AngularVelocity = Vector3.new(0, 50000, 0)
+                    spinForce.Parent = hrp
+                    while FlingAllEnabled do
+                        for _, targetPlayer in pairs(Players:GetPlayers()) do
+                            if targetPlayer ~= LocalPlayer and FlingAllEnabled then
+                                local targetChar = targetPlayer.Character
+                                local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                                if targetHrp then
+                                    local timer = tick()
+                                    while FlingAllEnabled and tick() - timer < 0.2 and targetHrp.Parent do
+                                        hrp.CFrame = targetHrp.CFrame
+                                        hrp.Velocity = Vector3.new(math.random(-5000, 5000), 5000, math.random(-5000, 5000))
+                                        task.wait(0.01)
+                                    end
+                                end
+                            end
+                        end
+                        task.wait()
+                    end
+                    if hrp:FindFirstChild("TrollSpin") then hrp.TrollSpin:Destroy() end
+                    hrp.Velocity = Vector3.new(0, 0, 0)
+                    hum.PlatformStand = false
+                end
+                FlingAllThread = nil
+            end)
+        else
+            if FlingAllThread then
+                repeat task.wait() until FlingAllThread == nil
+            end
+        end
+    end,
+})
+
+CharacterTab:Toggle({
+    Title = "无限跳",
+    Value = false,
+    Callback = function(value)
+        InfJumpEnabled = value
+        if InfJumpEnabled then
+            if not InfJumpConnection then
+                InfJumpConnection = UserInputService.JumpRequest:Connect(function()
+                    local char = LocalPlayer.Character
+                    local hum = char and char:FindFirstChildOfClass("Humanoid")
+                    if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+                end)
+            end
+        else
+            if InfJumpConnection then
+                InfJumpConnection:Disconnect()
+                InfJumpConnection = nil
+            end
+        end
+    end,
+})
+
+CharacterTab:Button({
+    Title = "克隆幻象",
+    Callback = function()
+        local char = LocalPlayer.Character
+        if char then
+            char.Archivable = true
+            local clone = char:Clone()
+            clone.Parent = Workspace
+            for _, v in pairs(clone:GetDescendants()) do
+                if v:IsA("Script") or v:IsA("LocalScript") then
+                    v:Destroy()
+                end
+            end
+        end
+    end,
+})
