@@ -68,6 +68,10 @@ local gameConfigs = {
     [70876832253163] = {
         name = "死铁轨",
         scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E6%AD%BB%E9%93%81%E8%BD%A8"
+    },
+    [137233438285284] = {
+        name = "鸡场",
+        scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E9%B8%A1%E5%9C%BA"
     }
 }
 
