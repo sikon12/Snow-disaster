@@ -1,0 +1,218 @@
+-- ===== WindUI =====
+local WindUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
+))()
+
+-- ===== 渐变标题 =====
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+    local length = #chars
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+        result = result .. string.format(
+            '<font color="rgb(%d,%d,%d)">%s</font>',
+            math.floor(r * 255),
+            math.floor(g * 255),
+            math.floor(b * 255),
+            chars[i]
+        )
+    end
+    return result
+end
+
+-- ===== 获取地图名 =====
+local MarketplaceService = game:GetService("MarketplaceService")
+local placeName = game.Name
+local ok, info = pcall(function()
+    return MarketplaceService:GetProductInfo(game.PlaceId)
+end)
+if ok and info then
+    placeName = info.Name
+end
+
+-- ===== 创建窗口 =====
+local Window = WindUI:CreateWindow({
+    Title = gradient("Snow disaster HUB", Color3.fromHex("#000080"), Color3.fromHex("#00FFFF")),
+    Author = gradient("司空", Color3.fromHex("#00FFAA"), Color3.fromHex("#00AAFF")),
+    Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+    IconThemed = true,
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 360),
+    Transparent = true,
+    Theme = "Dark",
+    Background = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/40597de97c2622ae03913003e0f360bb4e7ff9fa/u%3D2512903668%2C3742891092%26fm%3D253%26fmt%3Dauto%26app%3D138%26f%3DJPEG.webp",
+    SideBarWidth = 200,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    OpenButton = {
+        Title = "Snow disaster HUB",
+        Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+        CornerRadius = UDim.new(0, 8),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(
+            Color3.fromHex("FFFFFF"),
+            Color3.fromHex("0000FF")
+        ),
+        Draggable = true,
+    },
+})
+
+-- ===== 彩虹描边 =====
+do
+    local mainContainer = Window.UIElements and Window.UIElements.Main
+    if mainContainer then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "RainbowStroke"
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+        local rainbow = Instance.new("UIGradient")
+        rainbow.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 149, 237)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+        })
+
+        stroke.Parent = mainContainer
+        rainbow.Parent = stroke
+
+        task.spawn(function()
+            while mainContainer and mainContainer.Parent do
+                rainbow.Rotation = (rainbow.Rotation + 3.5) % 360
+                task.wait(0.03)
+            end
+        end)
+    end
+end
+
+-- ===== 地图名 Tag =====
+local Tag = Window:Tag({
+    Title = placeName,
+    Radius = 5,
+    Color = Color3.fromHex("#ADD8E6"),
+    Border = true,
+})
+
+-- ===== 功能页签 =====
+local Tabs = {
+    Tabgn = Window:Tab({
+        Title = "功能",
+        Icon = "info",
+    }),
+}
+
+-- ===== 服务 & Remote =====
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local UpgradeBuy = ReplicatedStorage
+    :WaitForChild("Remotes")
+    :WaitForChild("UpgradeBuy")
+
+local DigRequest = ReplicatedStorage
+    :WaitForChild("Remotes")
+    :WaitForChild("DigRequest")
+
+local SellRequest = ReplicatedStorage
+    :WaitForChild("Remotes")
+    :WaitForChild("SellRequest")
+
+-- ===== 购买1温暖 =====
+Tabs.Tabgn:Button({
+    Title = "购买1温暖",
+    Description = "点击购买 1 点温暖",
+    Callback = function()
+        UpgradeBuy:FireServer("Air", 1)
+    end
+})
+
+-- ===== 购买1背包重量 =====
+Tabs.Tabgn:Button({
+    Title = "购买1背包重量",
+    Description = "点击购买 1 点背包重量",
+    Callback = function()
+        UpgradeBuy:FireServer("Weight", 1)
+    end
+})
+
+-- ===== 自动挖掘（全部前方 1 格） =====
+Tabs.Tabgn:Toggle({
+    Title = "自动挖掘",
+    Description = "每 0.5 秒敲击前方 1 格的四个资源",
+    Default = false,
+    Callback = function(state)
+        _G.AutoDig = state
+        if state then
+            task.spawn(function()
+                while _G.AutoDig do
+                    pcall(function()
+                        local char = LocalPlayer.Character
+                        if not char then return end
+
+                        local camCF = Camera.CFrame
+                        local digPos =
+                            (camCF * CFrame.new(0, 0, -1)).Position
+
+                        -- 1️⃣ Weathered Wood
+                        DigRequest:FireServer(
+                            "Weathered Wood",
+                            vector.create(digPos.X, digPos.Y, digPos.Z)
+                        )
+
+                        -- 2️⃣ Chipped Stone
+                        DigRequest:FireServer(
+                            "Chipped Stone",
+                            vector.create(digPos.X, digPos.Y, digPos.Z)
+                        )
+
+                        -- 3️⃣ Rusty Scrapper
+                        DigRequest:FireServer(
+                            "Rusty Scrapper",
+                            vector.create(digPos.X, digPos.Y, digPos.Z)
+                        )
+
+                        -- 4️⃣ Hardened Iron
+                        DigRequest:FireServer(
+                            "Hardened Iron",
+                            vector.create(digPos.X, digPos.Y, digPos.Z)
+                        )
+                    end)
+                    task.wait(0.5)
+                end
+            end)
+        end
+    end
+})
+
+-- ===== 售卖（传送 → 卖 → 回原位） =====
+Tabs.Tabgn:Button({
+    Title = "售卖",
+    Description = "传送到 SellWorker，售卖后返回原地",
+    Callback = function()
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+
+            local originalCFrame = char:GetPivot()
+
+            local SellWorker = workspace:WaitForChild("Things")
+                :WaitForChild("SellWorker")
+
+            char:PivotTo(SellWorker:GetPivot())
+
+            task.wait(0.5)
+            SellRequest:FireServer("all")
+
+            char:PivotTo(originalCFrame)
+        end)
+    end
+})
