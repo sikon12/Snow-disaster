@@ -1,0 +1,247 @@
+-- =============================================
+--  整合启动脚本
+--  先执行防HttpSpy保护，再执行设备号检测（仅匹配-前半段）
+-- =============================================
+
+-- =============================================
+--  第一阶段：防HttpSpy 脚本保护
+-- =============================================
+local fuck=function()return"a"end
+hookfunction(fuck,function()return"b"end)
+if not isfunctionhooked then shit()return end
+if not isfunctionhooked(fuck)then shit()return end
+
+local bitch=game.HttpGet
+hookfunction(bitch,function()end)
+if not isfunctionhooked(bitch)then shit()return end
+restorefunction(bitch)
+if isfunctionhooked(bitch)then shit()return end
+
+local cunt=request or http_request or(syn and syn.request)or(fluxus and fluxus.request)
+
+spawn(function()
+    while task.wait(0.5)do
+        pcall(function()
+            if isfunctionhooked(game.HttpGet)then shit()end
+            if isfunctionhooked(game.HttpPost)then shit()end
+            if isfunctionhooked(tostring)then shit()end
+            if isfunctionhooked(setclipboard)then shit()end
+            if cunt and isfunctionhooked(cunt)then shit()end
+            if isfolder("HttpGetFolder")or isfolder("WebhookFolder")or isfolder("RequestFolder")then shit()end
+        end)
+    end
+end)
+
+for _,dick in pairs({"rconsoleprint","rconsolewarn","rconsoleinfo","rconsoleerr","rconsoletitle","clonefunction"})do
+    getgenv()[dick]=nil
+end
+
+-- =============================================
+--  第二阶段：设备号检测（仅匹配 - 前半段数字）
+-- =============================================
+
+-- ============ 获取设备号并提取前半段 ============
+local function getDevicePrefix()
+    local rawId
+    pcall(function()
+        rawId = game:GetService("RbxAnalyticsService"):GetDeviceId()
+    end)
+    if not rawId or rawId == "" then
+        pcall(function()
+            rawId = game:GetService("AnalyticsService"):GetSessionId()
+        end)
+    end
+    if not rawId or rawId == "" then
+        rawId = tostring(game.PlaceId) .. "-" .. tostring(game.JobId)
+    end
+    -- 只取 - 前面的部分
+    local prefix = string.match(rawId, "^(.-)%-")
+    return prefix or rawId, rawId
+end
+
+local devicePrefix, rawDeviceId = getDevicePrefix()
+
+-- ============ 从远程库解析设备号（仅取前半段）============
+local allowedPrefixes = {}
+local deviceIdsUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/ID%E6%94%BE%E7%BD%AE"
+
+local fetchSuccess, fetchResult = pcall(function()
+    return game:HttpGet(deviceIdsUrl)
+end)
+
+if fetchSuccess and fetchResult and fetchResult ~= "" then
+    for line in string.gmatch(fetchResult, "[^\r\n]+") do
+        local cleaned = string.match(line, "^%s*(.-)%s*$")
+        if cleaned ~= "" then
+            -- 只取 - 前面的部分作为比对基准
+            local prefix = string.match(cleaned, "^(.-)%-")
+            allowedPrefixes[prefix or cleaned] = true
+        end
+    end
+end
+
+-- 远程自动检测脚本地址
+local remoteScriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E8%87%AA%E5%8A%A8%E6%A3%80%E6%B5%8B"
+
+-- ============ 未授权弹窗 ============
+local function showDeny(deviceId)
+    local pg = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "DenyNotification"
+    sg.ResetOnSpawn = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.Parent = pg
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 0.55
+    bg.BorderSizePixel = 0
+    bg.ZIndex = 999
+    bg.Parent = sg
+
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(0, 400, 0, 200)
+    f.Position = UDim2.new(0.5, -200, 0.5, -100)
+    f.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+    f.BorderSizePixel = 0
+    f.ZIndex = 1000
+    f.Parent = sg
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 16)
+    corner.Parent = f
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 50, 50)
+    stroke.Thickness = 2
+    stroke.Parent = f
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -40, 0, 40)
+    title.Position = UDim2.new(0, 20, 0, 15)
+    title.Text = "⚠️ 未购买此脚本"
+    title.TextColor3 = Color3.fromRGB(255, 80, 80)
+    title.TextScaled = true
+    title.BackgroundTransparency = 1
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.ZIndex = 1001
+    title.Parent = f
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, -40, 0, 50)
+    txt.Position = UDim2.new(0, 20, 0, 60)
+    txt.Text = "当前设备不在授权列表中\n请联系卖家购买"
+    txt.TextColor3 = Color3.fromRGB(220, 220, 220)
+    txt.TextScaled = true
+    txt.BackgroundTransparency = 1
+    txt.Font = Enum.Font.Gotham
+    txt.TextWrapped = true
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.ZIndex = 1001
+    txt.Parent = f
+
+    local dev = Instance.new("TextLabel")
+    dev.Size = UDim2.new(1, -40, 0, 30)
+    dev.Position = UDim2.new(0, 20, 0, 120)
+    dev.Text = "设备ID: " .. (deviceId or "未知")
+    dev.TextColor3 = Color3.fromRGB(120, 120, 120)
+    dev.TextScaled = true
+    dev.BackgroundTransparency = 1
+    dev.Font = Enum.Font.Code
+    dev.TextXAlignment = Enum.TextXAlignment.Left
+    dev.ZIndex = 1001
+    dev.Parent = f
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 120, 0, 36)
+    btn.Position = UDim2.new(0.5, -60, 1, -50)
+    btn.Text = "我知道了"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    btn.BorderSizePixel = 0
+    btn.Font = Enum.Font.GothamBold
+    btn.ZIndex = 1001
+    btn.Parent = f
+
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 8)
+    bc.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        local ti = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        game:GetService("TweenService"):Create(f, ti, { BackgroundTransparency = 1 }):Play()
+        game:GetService("TweenService"):Create(stroke, ti, { Transparency = 1 }):Play()
+        game:GetService("TweenService"):Create(title, ti, { TextTransparency = 1 }):Play()
+        game:GetService("TweenService"):Create(txt, ti, { TextTransparency = 1 }):Play()
+        game:GetService("TweenService"):Create(dev, ti, { TextTransparency = 1 }):Play()
+        game:GetService("TweenService"):Create(btn, ti, { BackgroundTransparency = 1, TextTransparency = 1 }):Play()
+        game:GetService("TweenService"):Create(bg, ti, { BackgroundTransparency = 1 }):Play()
+        task.wait(0.4)
+        sg:Destroy()
+    end)
+end
+
+-- ============ 右下角加载通知 ============
+local function showNotification(message)
+    local player = game:GetService("Players").LocalPlayer
+    local playerGui = player:WaitForChild("PlayerGui")
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 300, 0, 60)
+    frame.Position = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 1
+    frame.Parent = screenGui
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Text = message
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextScaled = true
+    textLabel.BackgroundTransparency = 1
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = frame
+
+    frame:TweenPosition(
+        UDim2.new(1, -310, 1, -70),
+        Enum.EasingDirection.Out,
+        Enum.EasingStyle.Quad,
+        0.3
+    )
+
+    task.delay(2, function()
+        local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = game:GetService("TweenService"):Create(
+            textLabel, tweenInfo, { TextTransparency = 1 }
+        )
+        tween:Play()
+        tween.Completed:Wait()
+        screenGui:Destroy()
+    end)
+end
+
+-- =============================================
+--  核心逻辑：仅比对 - 前半段
+-- =============================================
+if allowedPrefixes[devicePrefix] then
+    showNotification("正在加载自动检测...")
+
+    task.spawn(function()
+        local success, errorMsg = pcall(function()
+            loadstring(game:HttpGet(remoteScriptUrl))()
+        end)
+
+        if not success then
+            warn("脚本加载失败: " .. errorMsg)
+        end
+    end)
+else
+    -- ❌ 未授权
+    showDeny(rawDeviceId)
+    warn("[Snow Disaster] 设备未授权: " .. (rawDeviceId or "无法获取"))
+end
