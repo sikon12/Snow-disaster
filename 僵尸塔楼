@@ -1,1 +1,444 @@
+local successUI, WindUI = pcall(function()
+    return loadstring(game:HttpGet(
+        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+        true
+    ))()
+end)
 
+if not successUI or not WindUI then
+    warn("WindUI 加载失败，脚本终止")
+    return
+end
+
+-- 渐变文字函数
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+    local length = #chars
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+        result = result .. string.format(
+            '<font color="rgb(%d,%d,%d)">%s</font>',
+            math.floor(r * 255),
+            math.floor(g * 255),
+            math.floor(b * 255),
+            chars[i]
+        )
+    end
+    return result
+end
+
+local MarketplaceService = game:GetService("MarketplaceService")
+local placeName = game.Name
+pcall(function()
+    placeName = MarketplaceService:GetProductInfo(game.PlaceId).Name
+end)
+
+local Window = WindUI:CreateWindow({
+    Title = gradient("Snow disaster HUB", Color3.fromHex("#000080"), Color3.fromHex("#00FFFF")),
+    Author = gradient("司空", Color3.fromHex("#00FFAA"), Color3.fromHex("#00AAFF")),
+    Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+    IconThemed = true,
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 330),
+    Transparent = true,
+    Theme = "Dark",
+    Background = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/40597de97c2622ae03913003e0f360bb4e7ff9fa/u%3D2512903668%2C3742891092%26fm%3D253%26fmt%3Dauto%26app%3D138%26f%3DJPEG.webp",
+    SideBarWidth = 200,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    OpenButton = {
+        Title = "Snow disaster HUB",
+        Icon = "https://raw.githubusercontent.com/smalldesikon/snow-disaster/5cffd85a953739a63162fa17e6f387aaee5e6c26/IMG_20260510_103943.png",
+        CornerRadius = UDim.new(0, 8),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(Color3.fromHex("FFFFFF"), Color3.fromHex("0000FF")),
+        Draggable = true,
+    },
+})
+
+-- 彩虹边框
+do
+    local mainContainer = Window.UIElements and Window.UIElements.Main
+    if mainContainer then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "RainbowStroke"
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        local rainbow = Instance.new("UIGradient")
+        rainbow.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 149, 237)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+        })
+        stroke.Parent = mainContainer
+        rainbow.Parent = stroke
+        task.spawn(function()
+            while mainContainer and mainContainer.Parent do
+                rainbow.Rotation = (rainbow.Rotation + 3.5) % 360
+                task.wait(0.03)
+            end
+        end)
+    end
+end
+
+Window:Tag({
+    Title = placeName,
+    Radius = 5,
+    Color = Color3.fromHex("#ADD8E6"),
+    Border = true,
+})
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local ActiveZombies = Workspace:WaitForChild("ActiveZombies")
+local AwaitingBosses = Workspace:WaitForChild("AwaitingBosses")
+
+-- ===================== 自动战斗 =====================
+local AutoKillEnabled = false
+
+local Event = nil
+pcall(function()
+    Event = ReplicatedStorage:WaitForChild("Events"):WaitForChild("Actions"):WaitForChild("Fire")
+end)
+
+local function ListRemotes()
+    local remotes = {}
+    local function Scan(folder, path)
+        for _, v in ipairs(folder:GetChildren()) do
+            local fullPath = path .. "." .. v.Name
+            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                table.insert(remotes, fullPath)
+            end
+            if #v:GetChildren() > 0 and not v:IsA("LocalScript") and not v:IsA("Script") then
+                Scan(v, fullPath)
+            end
+        end
+    end
+    pcall(function() Scan(ReplicatedStorage, "ReplicatedStorage") end)
+    return remotes
+end
+
+local function GetWeaponExit(character)
+    if not character then return nil end
+    local tool = character:FindFirstChildWhichIsA("Tool")
+    if not tool then return nil end
+
+    local exit = tool:FindFirstChild("Exit") or tool:FindFirstChild("Muzzle") or tool:FindFirstChild("FirePoint")
+    if exit then return exit, tool.Name end
+
+    for _, part in ipairs(tool:GetDescendants()) do
+        if part:IsA("BasePart") and (part.Name:lower():find("muzzle") or part.Name:lower():find("exit") or part.Name:lower():find("fire")) then
+            return part, tool.Name
+        end
+    end
+
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    return hrp, tool.Name
+end
+
+local function GetTarget()
+    local bossFolder = AwaitingBosses:FindFirstChild("Boss")
+    if bossFolder then
+        local bossModel = bossFolder:FindFirstChildWhichIsA("Model") or bossFolder:FindFirstChildWhichIsA("BasePart")
+        if bossModel then
+            local hitbox = bossModel:FindFirstChild("Head") or bossModel:FindFirstChild("HumanoidRootPart") or (bossModel:IsA("BasePart") and bossModel)
+            if hitbox then return hitbox end
+        end
+    end
+    for _, zombie in ipairs(ActiveZombies:GetChildren()) do
+        local hitbox = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
+        if hitbox then return hitbox end
+    end
+    return nil
+end
+
+task.spawn(function()
+    while true do
+        if AutoKillEnabled then
+            pcall(function()
+                local Character = LocalPlayer.Character
+                if not Character then return end
+
+                local exitPart, weaponName = GetWeaponExit(Character)
+                if not exitPart or not weaponName then return end
+
+                local targetPart = GetTarget()
+                if not targetPart then return end
+
+                local originPos = exitPart.Position
+                local targetPos = targetPart.Position
+                local direction = (targetPos - originPos).Unit
+
+                local success = pcall(function()
+                    Event:FireServer(
+                        weaponName,
+                        {{targetPart, targetPos, direction}},
+                        {{weaponName, originPos, targetPos, targetPos, true, targetPart, false, false, "Default", exitPart}}
+                    )
+                end)
+
+                if not success then
+                    pcall(function()
+                        Event:FireServer(weaponName, targetPart, targetPos)
+                    end)
+                end
+            end)
+        end
+        task.wait(0.05)
+    end
+end)
+
+-- ===================== ESP 功能 =====================
+local ESPEnabled = false
+local ESP_COLOR = Color3.fromRGB(255, 0, 0)
+local LINE_COLOR = Color3.fromRGB(255, 0, 0)
+local LINE_THICKNESS = 0.06
+local MAX_DISTANCE = 500
+
+local espData = {}
+
+local function CreateOrUpdateESP(zombie)
+    if not zombie or not zombie:IsA("Model") then return end
+
+    local head = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
+    if not head then return end
+
+    local data = espData[zombie]
+    if not data then
+        local hl = Instance.new("Highlight")
+        hl.Name = "ZombieESP"
+        hl.FillColor = ESP_COLOR
+        hl.OutlineColor = Color3.fromRGB(255, 80, 80)
+        hl.FillTransparency = 0.5
+        hl.OutlineTransparency = 0.2
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Adornee = zombie
+        hl.Parent = CoreGui
+
+        local line = Instance.new("Part")
+        line.Name = "ZombieLine"
+        line.Material = Enum.Material.Neon
+        line.Color = LINE_COLOR
+        line.Transparency = 0.3
+        line.Anchored = true
+        line.CanCollide = false
+        line.CanQuery = false
+        line.Size = Vector3.new(LINE_THICKNESS, LINE_THICKNESS, 2)
+        line.Parent = Workspace.CurrentCamera
+
+        espData[zombie] = { highlight = hl, linePart = line }
+        data = espData[zombie]
+    end
+
+    local cam = Workspace.CurrentCamera
+    if cam then
+        local topCenter = cam.ViewportSize.X / 2
+        local topPos = cam:ScreenPointToRay(topCenter, 0, 1).Origin + cam.CFrame.UpVector * 2
+        local headPos = head.Position
+        local distance = (headPos - topPos).Magnitude
+
+        if distance > MAX_DISTANCE then
+            data.linePart.Transparency = 1
+            data.highlight.Enabled = false
+        else
+            data.linePart.Transparency = 0.3
+            data.highlight.Enabled = true
+            data.linePart.Size = Vector3.new(LINE_THICKNESS, LINE_THICKNESS, distance)
+            data.linePart.CFrame = CFrame.new(topPos, headPos) * CFrame.new(0, 0, -distance / 2)
+        end
+    end
+end
+
+local function RemoveESP(zombie)
+    local data = espData[zombie]
+    if data then
+        if data.highlight then data.highlight:Destroy() end
+        if data.linePart then data.linePart:Destroy() end
+        espData[zombie] = nil
+    end
+end
+
+local function ClearAllESP()
+    for zombie, _ in pairs(espData) do
+        RemoveESP(zombie)
+    end
+end
+
+local function ESPUpdate()
+    while true do
+        if ESPEnabled then
+            for _, zombie in ipairs(ActiveZombies:GetChildren()) do
+                if zombie:IsA("Model") then
+                    CreateOrUpdateESP(zombie)
+                end
+            end
+            for zombie, _ in pairs(espData) do
+                if not zombie or not zombie.Parent then
+                    RemoveESP(zombie)
+                end
+            end
+        else
+            for _, data in pairs(espData) do
+                if data.highlight then data.highlight.Enabled = false end
+                if data.linePart then data.linePart.Transparency = 1 end
+            end
+        end
+        task.wait(0.05)
+    end
+end
+
+ActiveZombies.ChildAdded:Connect(function(child)
+    if ESPEnabled and child:IsA("Model") then
+        task.wait(0.1)
+        CreateOrUpdateESP(child)
+    end
+end)
+
+ActiveZombies.ChildRemoved:Connect(function(child)
+    RemoveESP(child)
+end)
+
+task.spawn(ESPUpdate)
+
+-- ===================== 删除受伤方块（TouchLava）=====================
+local RemoveLavaEnabled = false
+local touchLavaPath = Workspace:WaitForChild("TouchLava", 5)
+
+local function RemoveTouchLava()
+    pcall(function()
+        if touchLavaPath and touchLavaPath.Parent then
+            touchLavaPath:Destroy()
+            print("[删除受伤方块] TouchLava 已删除")
+        end
+    end)
+end
+
+local function RestoreTouchLava()
+    pcall(function()
+        -- 检查是否已存在
+        local existing = Workspace:FindFirstChild("TouchLava")
+        if not existing then
+            local newFolder = Instance.new("Folder")
+            newFolder.Name = "TouchLava"
+            newFolder.Parent = Workspace
+            touchLavaPath = newFolder
+            print("[删除受伤方块] TouchLava 已恢复")
+        else
+            touchLavaPath = existing
+        end
+    end)
+end
+
+-- 持续监控：如果开启状态下 TouchLava 被重新创建，再次删除
+task.spawn(function()
+    while true do
+        if RemoveLavaEnabled then
+            pcall(function()
+                local existing = Workspace:FindFirstChild("TouchLava")
+                if existing then
+                    existing:Destroy()
+                end
+            end)
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- ===================== UI 标签页 =====================
+local MainTab = Window:Tab({ Title = "战斗功能", Icon = "swords" })
+local ESPTab = Window:Tab({ Title = "视觉功能", Icon = "eye" })
+Window:SelectTab(1)
+
+-- 调试按钮
+MainTab:Button({
+    Title = "检测武器事件",
+    Callback = function()
+        local remotes = ListRemotes()
+        print("=== 可用 RemoteEvent ===")
+        for _, v in ipairs(remotes) do
+            print(v)
+        end
+        print("=== Event 状态 ===")
+        print("Event 对象:", Event)
+        if Event then
+            print("Event 路径:", Event:GetFullName())
+        end
+    end
+})
+
+-- 自动秒杀
+MainTab:Toggle({
+    Title = "自动秒杀",
+    Value = false,
+    Callback = function(state)
+        AutoKillEnabled = state
+        if state then
+            print("[自动秒杀] 已开启")
+        else
+            print("[自动秒杀] 已关闭")
+        end
+    end
+})
+
+-- 删除受伤方块
+MainTab:Toggle({
+    Title = "删除受伤方块（TouchLava）",
+    Value = false,
+    Callback = function(state)
+        RemoveLavaEnabled = state
+        if state then
+            RemoveTouchLava()
+        else
+            RestoreTouchLava()
+        end
+    end
+})
+
+-- 视觉：ESP 开关
+ESPTab:Toggle({
+    Title = "僵尸 ESP（高亮+连线）",
+    Value = false,
+    Callback = function(state)
+        ESPEnabled = state
+        if not state then
+            for _, data in pairs(espData) do
+                if data.highlight then data.highlight.Enabled = false end
+                if data.linePart then data.linePart.Transparency = 1 end
+            end
+        end
+    end
+})
+
+-- 视觉：ESP 颜色选择
+ESPTab:ColorPicker({
+    Title = "ESP 颜色",
+    Default = Color3.fromRGB(255, 0, 0),
+    Callback = function(color)
+        ESP_COLOR = color
+        for _, data in pairs(espData) do
+            if data.highlight then
+                data.highlight.FillColor = color
+                data.highlight.OutlineColor = Color3.new(
+                    math.min(color.R + 0.3, 1),
+                    math.min(color.G + 0.3, 1),
+                    math.min(color.B + 0.3, 1)
+                )
+            end
+            if data.linePart then
+                data.linePart.Color = color
+            end
+        end
+    end
+})
