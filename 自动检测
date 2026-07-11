@@ -92,6 +92,10 @@ local gameConfigs = {
     [121418861436763] = {
         name = "在超级商店中生存",
         scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E5%9C%A8%E8%B6%85%E7%BA%A7%E5%95%86%E5%BA%97%E4%B8%AD%E7%94%9F%E5%AD%98"
+    },
+    [70906625936847] = {
+        name = "健身房之星模拟器",
+        scriptUrl = "https://raw.githubusercontent.com/sikon12/Snow-disaster/refs/heads/main/%E5%81%A5%E8%BA%AB%E6%88%BF%E4%B9%8B%E6%98%9F%E6%A8%A1%E6%8B%9F%E5%99%A8"
     }
 }
 
